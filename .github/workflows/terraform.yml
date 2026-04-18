@@ -42,7 +42,7 @@ jobs:
       - name: Create Plan
         run: |
           terraform init -input=false -reconfigure
-          terraform plan -input=false -out=tfplan -var-file="environments/develop.tfvars"
+          terraform plan -input=false -out=tfplan 
       - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
@@ -78,4 +78,4 @@ jobs:
         run: |
           terraform init -input=false -reconfigure
           # O comando abaixo agora terá o token preenchido via variável de ambiente
-          terraform destroy -auto-approve -var-file="environments/develop.tfvars"
+          terraform destroy -auto-approve 
