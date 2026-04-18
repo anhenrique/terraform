@@ -5,51 +5,30 @@ on:
     branches: [ "main" ]
   pull_request:
   workflow_dispatch: 
+
+# Credenciais globais para a CONTA B (Criação de recursos)
 env: 
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: "sa-east-1"
 
-
-permissions:
-  contents: read
-
 jobs:
-  validate:
-    name: 'Terraform'
-    runs-on: ubuntu-latest
-    container: hashicorp/terraform:1.14.8
-    
-
-    steps:
-    # Checkout the repository to the GitHub Actions runner
-    - name: Checkout
-      uses: actions/checkout@v4
-    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
-    - name: Terraform Init
-      run: |
-        terraform init -input=false -reconfigure \
-          -backend-config="access_key=${{ secrets.AWS_ACCESS_KEY_ID_STATE }}" \
-          -backend-config="secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY_STATE }}" \
-          -backend-config="region=sa-east-1" \
-          -backend-config="bucket=terraform-starter-bucket-b8uzs" \
-          -backend-config="key=terraform.tfstate"
-
-    # Checks that all Terraform configuration files adhere to a canonical format
-    - name: Terraform Format and Validate
-      run: terraform fmt -check || true
-           terraform validate
-           
   plan:
-    needs: validate
+    name: 'Terraform Plan'
     runs-on: ubuntu-latest
     container: hashicorp/terraform:1.14.8
     steps:
       - uses: actions/checkout@v4
-      - name: Create Plan
+      - name: Terraform Init
         run: |
-          terraform init -input=false -reconfigure
-          terraform plan -input=false -out=tfplan 
+          terraform init -input=false -reconfigure \
+            -backend-config="access_key=${{ secrets.AWS_ACCESS_KEY_ID_STATE }}" \
+            -backend-config="secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY_STATE }}" \
+            -backend-config="region=sa-east-1" \
+            -backend-config="bucket=terraform-starter-bucket-b8uzs" \
+            -backend-config="key=terraform.tfstate"
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan
       - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
@@ -57,9 +36,10 @@ jobs:
           path: tfplan
 
   apply:
+    name: 'Terraform Apply'
     needs: plan
     runs-on: ubuntu-latest
-    environment: production # Exige aprovação manual se configurado no repositório
+    environment: production # Exige aprovação manual se configurado no repositório [1]
     container: hashicorp/terraform:1.14.8
     steps:
       - uses: actions/checkout@v4
@@ -68,21 +48,33 @@ jobs:
           name: tfplan
       - name: Terraform Apply
         run: |
-          terraform init -input=false -reconfigure
-          terraform apply -input=false tfplan
-    
+          # Inicialização necessária para o backend antes do apply [1]
+          terraform init -input=false -reconfigure \
+            -backend-config="access_key=${{ secrets.AWS_ACCESS_KEY_ID_STATE }}" \
+            -backend-config="secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY_STATE }}" \
+            -backend-config="region=sa-east-1" \
+            -backend-config="bucket=terraform-starter-bucket-b8uzs" \
+            -backend-config="key=terraform.tfstate"
+          terraform apply -input=false tfplan [1]
+
   destroy:
+    name: 'Terraform Destroy'
     runs-on: ubuntu-latest
-    environment: destroy-prod # 1. Garante a pausa manual (se configurado no GitHub)
+    environment: destroy-prod # Garante a pausa manual [1]
     container: hashicorp/terraform:1.14.8
     env:
-      # 2. Injeta o token necessário para o provedor vcd não dar erro de "empty token"
+      # Injeta as chaves para evitar erro de "empty token" [1]
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Terraform Destroy
         run: |
-          terraform init -input=false -reconfigure
-          # O comando abaixo agora terá o token preenchido via variável de ambiente
-          terraform destroy -auto-approve 
+          # Inicialização do backend para o destroy [1]
+          terraform init -input=false -reconfigure \
+            -backend-config="access_key=${{ secrets.AWS_ACCESS_KEY_ID_STATE }}" \
+            -backend-config="secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY_STATE }}" \
+            -backend-config="region=sa-east-1" \
+            -backend-config="bucket=terraform-starter-bucket-b8uzs" \
+            -backend-config="key=terraform.tfstate"
+          terraform destroy -auto-approve [1]
