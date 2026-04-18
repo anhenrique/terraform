@@ -1,0 +1,6 @@
+.terraform*
+*.tfstate*
+iam_policy
+lab2
+lab3
+aws/*
